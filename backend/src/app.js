@@ -24,7 +24,7 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:5173',  // Vite default
     'http://localhost:5174',
-    // Add your production domains here
+    'https://campus-nav-app-henna.vercel.app'
   ],
   credentials: true,
 }));
