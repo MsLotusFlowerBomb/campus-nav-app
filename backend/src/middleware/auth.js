@@ -1,6 +1,6 @@
 // Authentication middleware
 
-const { supabase } = require('../config/supabase');
+const { supabaseAdmin } = require('../config/supabase');
 const { errorResponse } = require('../utils/response');
 const logger = require('../utils/logger');
 
@@ -18,7 +18,7 @@ const authenticateUser = async (req, res, next) => {
     const token = authHeader.split(' ')[1];
 
     // Verify token with Supabase
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
     if (error || !user) {
       logger.warn('Authentication failed:', error?.message || 'No user found');
@@ -26,7 +26,7 @@ const authenticateUser = async (req, res, next) => {
     }
 
     // Get user profile from database
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('id', user.id)
@@ -69,13 +69,13 @@ const optionalAuth = async (req, res, next) => {
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
-      const { data: { user }, error } = await supabase.auth.getUser(token);
+      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
       
       if (!error && user) {
         req.user = user;
         req.userId = user.id;
         
-        const { data: profile } = await supabase
+        const { data: profile } = await supabaseAdmin
           .from('profiles')
           .select('*')
           .eq('id', user.id)

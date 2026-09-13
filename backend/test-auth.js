@@ -5,7 +5,7 @@ require('dotenv').config();
 const BASE_URL = process.env.API_URL || 'http://localhost:3000';
 
 async function testAuth() {
-  console.log('🧪 Testing Campus Navigation Auth\n');
+  console.log('Testing Campus Navigation Auth\n');
   console.log('API:', BASE_URL);
   console.log('='.repeat(50) + '\n');
 
@@ -27,7 +27,7 @@ async function testAuth() {
   // ─────────────────────────────────────────────
   // TEST 1: Register
   // ─────────────────────────────────────────────
-  console.log('📝 TEST 1: Register');
+  console.log('TEST 1: Register');
   console.log('-'.repeat(50));
   console.log('Sending:', JSON.stringify(registerPayload, null, 2));
   console.log('');
@@ -46,14 +46,14 @@ async function testAuth() {
     console.log('Response:', JSON.stringify(data, null, 2));
 
     if (!res.ok || !data.success) {
-      console.log('\n❌ Register failed. Stopping here.');
+      console.log('\nRegister failed. Stopping here.');
       return;
     }
 
     accessToken = data.data?.accessToken;
-    console.log('\n✅ Register succeeded\n');
+    console.log('\n Register succeeded\n');
   } catch (err) {
-    console.error('❌ Network error:', err.message);
+    console.error(' Network error:', err.message);
     console.log('   Is the server running? Try: npm run dev');
     return;
   }
@@ -61,7 +61,7 @@ async function testAuth() {
   // ─────────────────────────────────────────────
   // TEST 2: Login
   // ─────────────────────────────────────────────
-  console.log('🔑 TEST 2: Login');
+  console.log(' TEST 2: Login');
   console.log('-'.repeat(50));
 
   try {
@@ -80,22 +80,22 @@ async function testAuth() {
 
     if (res.ok && data.success) {
       accessToken = data.data?.accessToken || accessToken;
-      console.log('\n✅ Login succeeded\n');
+      console.log('\nLogin succeeded\n');
     } else {
-      console.log('\n❌ Login failed\n');
+      console.log('\n Login failed\n');
     }
   } catch (err) {
-    console.error('❌ Network error:', err.message);
+    console.error(' Network error:', err.message);
   }
 
   // ─────────────────────────────────────────────
   // TEST 3: Get current user (/me)
   // ─────────────────────────────────────────────
-  console.log('👤 TEST 3: Get current user (/me)');
+  console.log(' TEST 3: Get current user (/me)');
   console.log('-'.repeat(50));
 
   if (!accessToken) {
-    console.log('⚠️  Skipped — no access token from previous tests\n');
+    console.log('  Skipped — no access token from previous tests\n');
   } else {
     try {
       const res = await fetch(`${BASE_URL}/api/v1/auth/me`, {
@@ -107,19 +107,19 @@ async function testAuth() {
       console.log('Response:', JSON.stringify(data, null, 2));
 
       if (res.ok && data.success) {
-        console.log('\n✅ Auth flow complete — everything works!\n');
+        console.log('\n Auth flow complete — everything works!\n');
       } else {
-        console.log('\n❌ /me failed\n');
+        console.log('\n /me failed\n');
       }
     } catch (err) {
-      console.error('❌ Network error:', err.message);
+      console.error(' Network error:', err.message);
     }
   }
 
   // ─────────────────────────────────────────────
   // TEST 4: Reject bad token
   // ─────────────────────────────────────────────
-  console.log('🚫 TEST 4: Reject invalid token');
+  console.log(' TEST 4: Reject invalid token');
   console.log('-'.repeat(50));
 
   try {
@@ -132,19 +132,19 @@ async function testAuth() {
     console.log('Response:', JSON.stringify(data, null, 2));
 
     if (res.status === 401) {
-      console.log('\n✅ Invalid tokens correctly rejected\n');
+      console.log('\n Invalid tokens correctly rejected\n');
     } else {
-      console.log('\n⚠️  Expected 401 for bad token\n');
+      console.log('\n  Expected 401 for bad token\n');
     }
   } catch (err) {
-    console.error('❌ Network error:', err.message);
+    console.error(' Network error:', err.message);
   }
 
   // ─────────────────────────────────────────────
   // Summary
   // ─────────────────────────────────────────────
   console.log('='.repeat(50));
-  console.log('📊 Summary');
+  console.log(' Summary');
   console.log('='.repeat(50));
   console.log('Email used:  ', registerPayload.email);
   console.log('Password:    ', password);
@@ -156,6 +156,6 @@ async function testAuth() {
 }
 
 testAuth().catch((err) => {
-  console.error('💥 Test crashed:', err);
+  console.error(' Test crashed:', err);
   process.exit(1);
 });
