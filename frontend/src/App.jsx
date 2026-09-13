@@ -54,6 +54,7 @@ import {
   QrCode,
   Footprints
 } from "lucide-react";
+import { api, setToken, getToken, clearToken } from './api/client';
 import "./App.css";
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -1105,6 +1106,22 @@ function App() {
     setProfileMessage("");
   }, [view, userProfile]);
 
+  // RESTORE SESSION PROFILE FROM TOKEN (if any) ON APP LOAD
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    api.me()
+      .then((res) => {
+        setUserProfile(res.data);
+        setProfileMode("view");
+      })
+      .catch(() => {
+        // Token expired or invalid — start fresh
+        clearToken();
+      });
+  }, []);
+
   const isFavourite = useCallback(
     (placeId) => favourites.includes(placeId),
     [favourites]
@@ -1121,6 +1138,8 @@ function App() {
     [places, favourites]
   );
 
+  // GUEST HANDLER
+  /* 
   const handleGuestContinue = () => {
     const fullName = (profileForm.fullName || "").trim();
     const phone = (profileForm.phone || "").trim();
@@ -1156,9 +1175,44 @@ function App() {
     setProfileMode("view");
     setProfileMessage("Welcome, guest!");
     setView("map");
+  }; */
+  const handleGuestContinue = async () => {
+    const fullName = (profileForm.fullName || "").trim();
+    const phone = (profileForm.phone || "").trim();
+    const email = (profileForm.email || "").trim();
+
+    //client-side validation 
+    if (!isValidFullName(fullName)) {
+      setProfileMessage("Enter your name and surname (letters only).");
+      return;
+    }
+    if (!phone && !email) {
+      setProfileMessage("Enter a phone number or email so we can contact you if needed.");
+      return;
+    }
+    if (phone && !isValidPhone(phone)) {
+      setProfileMessage("Enter a valid phone number (10–15 digits).");
+      return;
+    }
+    if (email && !isValidEmail(email)) {
+      setProfileMessage("Enter a valid email address.");
+      return;
+    }
+
+    try {
+      const res = await api.guest({ fullName, phone, email });
+      setToken(res.data.accessToken);
+      setUserProfile(res.data.profile);
+      setProfileMode("view");
+      setProfileMessage("Welcome, guest!");
+      setView("map");
+    } catch (err) {
+      setProfileMessage(err.message || "Could not start guest session. Please try again.");
+    }
   };
 
-  const handleRegister = () => {
+  // REGISTRATION HANDLER
+  /* const handleRegister = () => {
     // Public registration is students only — admins are provisioned, not self-registered
     if (profileForm.role === "admin") {
       setProfileMessage("Administrator accounts cannot be created here. Please sign in with staff credentials.");
@@ -1261,8 +1315,74 @@ function App() {
       setProfileMessage("Student account created successfully. Welcome!");
       setView("map");
     }
+  }; */
+  
+  const handleRegister = async () => {
+    const sn = (profileForm.studentNumber || "").trim().toUpperCase();
+    const fullName = (profileForm.fullName || "").trim();
+    const email = (profileForm.email || "").trim();
+    const phone = (profileForm.phone || "").trim();
+    const password = profileForm.password || "";
+    const confirmPassword = profileForm.confirmPassword || "";
+
+    // Keep your existing client-side validation
+    if (!isValidStudentNumber(sn)) {
+      setProfileMessage("Enter a valid student number (e.g. 202012345 — 8 to 11 digits).");
+      return;
+    }
+    if (!isValidFullName(fullName)) {
+      setProfileMessage("Enter a valid full name (letters only, at least 2 characters).");
+      return;
+    }
+    if (!email || !isValidEmail(email)) {
+      setProfileMessage("Enter a valid email address (e.g. name@ul.ac.za).");
+      return;
+    }
+    if (phone && !isValidPhone(phone)) {
+      setProfileMessage("Enter a valid phone number (10–15 digits).");
+      return;
+    }
+    if (!isStrongPassword(password)) {
+      setProfileMessage(
+        "Password must be 8+ characters with uppercase, lowercase, a number, and a special character."
+      );
+      return;
+    }
+    if (password !== confirmPassword) {
+      setProfileMessage("Passwords do not match.");
+      return;
+    }
+
+    try {
+      const res = await api.register({
+        studentNumber: sn,
+        fullName,
+        email,
+        phone,
+        password,
+        confirmPassword,
+        faculty: profileForm.faculty || "",
+        yearOfStudy: profileForm.yearOfStudy || "",
+      });
+        
+      setProfileMessage(
+        "Account created. Login to continue."
+      );
+        setProfileMode("login");
+      
+      setProfileForm((f) => ({ ...f, password: "", confirmPassword: "" }));
+    } catch (err) {
+      if (err.status === 409) {
+        setProfileMessage(err.message || "An account with this information already exists.");
+        setProfileMode("login");
+      } else {
+        setProfileMessage(err.message || "Registration failed. Please try again.");
+      }
+    }
   };
 
+  // LOGIN HANDLER
+  /* 
   const handleLogin = () => {
     const role = "student";
     const sn = (profileForm.studentNumber || "").trim().toUpperCase();
@@ -1293,9 +1413,9 @@ function App() {
             saveAccount(saved);
           }
         }
-      } catch { /* ignore */ }
+      } catch {  ignore  }
     }
-
+  /* 
     if (!saved) {
       setProfileMessage("No student account found for this number. Please register.");
       setProfileMode("register");
@@ -1316,8 +1436,8 @@ function App() {
       }
       saved = { ...saved, password };
       saveAccount(saved);
-    }
-
+    } */
+    /* 
     setUserProfile(saved);
     setProfileMode("view");
     setProfileForm((f) => ({ ...f, password: "", confirmPassword: "" }));
@@ -1329,7 +1449,42 @@ function App() {
       ]
     }));
     setProfileMessage("Welcome back!");
-    setView("map");
+    setView("map"); 
+  }; 
+  */
+
+  const handleLogin = async () => {
+    const sn = (profileForm.studentNumber || "").trim().toUpperCase();
+    const password = profileForm.password || "";
+
+    if (!sn) {
+      setProfileMessage("Enter your student number to continue.");
+      return;
+    }
+    if (!password) {
+      setProfileMessage("Enter your password.");
+      return;
+    }
+
+    try {
+      // Backend accepts studentNumber + password
+      const res = await api.login({ studentNumber: sn, password });
+
+      setToken(res.data.accessToken);
+      setUserProfile(res.data.profile);
+      setProfileMode("view");
+      setView("map");
+      setProfileMessage("Welcome back!");
+      setProfileForm((f) => ({ ...f, password: "" }));
+    } catch (err) {
+      if (err.status === 401) {
+        setProfileMessage("Incorrect student number or password.");
+      } else if (err.status === 403) {
+        setProfileMessage("Please verify your email before signing in.");
+      } else {
+        setProfileMessage(err.message || "Login failed. Please try again.");
+      }
+    }
   };
 
   const handleSaveProfile = () => {
@@ -1380,7 +1535,22 @@ function App() {
     setProfileMessage("Profile updated.");
   };
 
-  const handleLogout = () => {
+  // LOGOUT HANDLER
+  /* const handleLogout = () => {
+    setUserProfile(null);
+    setProfileForm(emptyProfileForm("student"));
+    setProfileMode("login");
+    setProfileMessage("You have been signed out.");
+    setView("map");
+    setAdminTab("overview");
+  }; */
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Ignore — we're logging out anyway
+    }
+    clearToken();
     setUserProfile(null);
     setProfileForm(emptyProfileForm("student"));
     setProfileMode("login");
@@ -2596,11 +2766,19 @@ function App() {
               </button>
             </div>
           )}
-
-          {profileMessage && (
-            <div className={`profile-msg ${profileMessage.includes("success") || profileMessage.includes("Welcome") ? "success" : "info"}`}>
-              {profileMessage}
-            </div>
+            {/* Verify Email Banner */}
+          {
+            profileMessage && (
+            profileMessage.toLowerCase().includes("verify") ? (
+              <div className="verify-email-banner">
+                <Mail size={16} />
+                <span>{profileMessage}</span>
+              </div>
+            ) : (
+              <div className={`profile-msg ${profileMessage.includes("success") || profileMessage.includes("Welcome") ? "success" : "info"}`}>
+                {profileMessage}
+              </div>
+            )
           )}
 
           <div className="auth-form">
