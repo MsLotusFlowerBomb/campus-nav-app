@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32">
+  <!-- white background circle -->
+  <circle cx="50" cy="50" r="46" fill="#ffffff"/>
+  <!-- red outer ring -->
+  <circle cx="50" cy="50" r="46" fill="none" stroke="#e30613" stroke-width="8"/>
+  <!-- wheelchair (simplified standard symbol) -->
+  <g fill="#1a1a1a" stroke="none">
+    <!-- head -->
+    <circle cx="42" cy="28" r="7"/>
+    <!-- torso + armrest -->
+    <path d="M36 36 h14 c4 0 7 2.5 8 6.5 l4 12 h8 v6 h-10 l-3.5-10.5 H40 l-2.5 12 H28 l4.5-16.5 C33 38.5 34.5 36 36 36 z"/>
+    <!-- large rear wheel -->
+    <circle cx="38" cy="68" r="14" fill="none" stroke="#1a1a1a" stroke-width="5.5"/>
+    <!-- small front wheel -->
+    <circle cx="62" cy="70" r="9" fill="none" stroke="#1a1a1a" stroke-width="4.5"/>
+    <!-- footrest -->
+    <path d="M52 62 h14" stroke="#1a1a1a" stroke-width="4" stroke-linecap="round" fill="none"/>
+  </g>
+  <!-- red prohibition slash -->
+  <line x1="22" y1="22" x2="78" y2="78" stroke="#e30613" stroke-width="9" stroke-linecap="round"/>
+</svg>
