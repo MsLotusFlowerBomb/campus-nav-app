@@ -1007,22 +1007,9 @@ function App() {
   const watchId = useRef(null);
   const lastPosRef = useRef(null);
 
-  const [favourites, setFavourites] = useState(() => {
-    try {
-      const raw = localStorage.getItem("ul_nav_favourites");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [userProfile, setUserProfile] = useState(() => {
-    try {
-      const raw = localStorage.getItem("ul_nav_profile");
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [favourites, setFavourites] = useState([]);
+  const [userProfile, setUserProfile] = useState(null);
+  const [profileMode, setProfileMode] = useState("login");
   const [profileForm, setProfileForm] = useState({
     role: "student",
     studentNumber: "",
@@ -1035,17 +1022,10 @@ function App() {
     password: "",
     confirmPassword: ""
   });
-  const [profileMode, setProfileMode] = useState(() => {
-    try {
-      const raw = localStorage.getItem("ul_nav_profile");
-      return raw ? "view" : "login";
-    } catch {
-      return "login";
-    }
-  });
   const [profileMessage, setProfileMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showQrPopup, setShowQrPopup] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(() => !!getToken());
 
   const emptyProfileForm = (role = "student") => ({
     role,
@@ -1180,19 +1160,6 @@ function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem("ul_nav_favourites", JSON.stringify(favourites));
-    } catch { /* ignore */ }
-  }, [favourites]);
-
-  useEffect(() => {
-    try {
-      if (userProfile) localStorage.setItem("ul_nav_profile", JSON.stringify(userProfile));
-      else localStorage.removeItem("ul_nav_profile");
-    } catch { /* ignore */ }
-  }, [userProfile]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem("ul_nav_events", JSON.stringify(campusEvents));
     } catch { /* ignore */ }
   }, [campusEvents]);
@@ -1249,31 +1216,64 @@ function App() {
     setProfileMessage("");
   }, [view, userProfile]);
 
-  // RESTORE SESSION PROFILE FROM TOKEN (if any) ON APP LOAD
+  // RESTORE SESSION PROFILE FROM TOKEN ON APP LOAD
   useEffect(() => {
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      setBootstrapping(false);
+      return;
+    }
 
-    api.me()
-      .then((res) => {
-        setUserProfile(res.data);
+    Promise.all([
+      api.me(),
+      api.getFavourites().catch(() => ({ data: [] })),
+    ])
+      .then(([profileRes, favRes]) => {
+        setUserProfile(profileRes.data);
         setProfileMode("view");
+        setFavourites(
+          (favRes.data || [])
+            .map((p) => p.slug || p.id)
+            .filter(Boolean)
+        );
       })
       .catch(() => {
         clearToken();
+        setFavourites([]);
+      })
+      .finally(() => {
+        setBootstrapping(false);
       });
   }, []);
-
   const isFavourite = useCallback(
     (placeId) => favourites.includes(placeId),
     [favourites]
   );
 
-  const toggleFavourite = useCallback((placeId) => {
+  const toggleFavourite = useCallback(async (placeId) => {
+    const isFav = favourites.includes(placeId);
+
+    // Optimistic update — UI responds instantly
     setFavourites((prev) =>
-      prev.includes(placeId) ? prev.filter((id) => id !== placeId) : [...prev, placeId]
+      isFav ? prev.filter((id) => id !== placeId) : [...prev, placeId]
     );
-  }, []);
+
+    try {
+      if (isFav) {
+        await api.removeFavourite(placeId);
+      } else {
+        await api.addFavourite(placeId);
+      }
+    } catch (err) {
+      // Roll back on failure
+      setFavourites((prev) =>
+        isFav ? [...prev, placeId] : prev.filter((id) => id !== placeId)
+      );
+      //console.error('Favourite toggle failed:', err.message);
+      // Optional: show a message to the user
+      setProfileMessage('Could not update favourite. Please try again.');
+    }
+  }, [favourites]);
 
   const favouritePlaces = useMemo(
     () => places.filter((p) => favourites.includes(p.id)),
@@ -1307,6 +1307,10 @@ function App() {
       const res = await api.guest({ fullName, phone, email });
       setToken(res.data.accessToken);
       setUserProfile(res.data.profile);
+
+      // Guests start with no favourites, but keep the flow consistent
+      setFavourites([]);
+
       setProfileMode("view");
       setProfileMessage("Welcome, guest!");
       setView("map");
@@ -1392,9 +1396,20 @@ function App() {
 
     try {
       const res = await api.login({ studentNumber: sn, password });
-
       setToken(res.data.accessToken);
-      setUserProfile(res.data.profile);
+
+      // Fetch the freshest profile and favourites together
+      const [profileRes, favRes] = await Promise.all([
+        api.me(),
+        api.getFavourites(),
+      ]);
+
+      setUserProfile(profileRes.data);
+      setFavourites(
+        (favRes.data || [])
+          .map((p) => p.slug || p.id)
+          .filter(Boolean)
+      );
       setProfileMode("view");
       setView("map");
       setProfileMessage("Welcome back!");
@@ -1410,21 +1425,13 @@ function App() {
     }
   };
 
-  const handleSaveProfile = () => {
+  // SAVE PROFILE HANDLER — backend integrated
+  const handleSaveProfile = async () => {
     const fullName = (profileForm.fullName || "").trim();
-    const email = (profileForm.email || "").trim();
     const phone = (profileForm.phone || "").trim();
 
     if (!isValidFullName(fullName)) {
       setProfileMessage("Enter a valid full name (letters only, at least 2 characters).");
-      return;
-    }
-    if (!email) {
-      setProfileMessage("Email is required.");
-      return;
-    }
-    if (!isValidEmail(email)) {
-      setProfileMessage("Enter a valid email address (e.g. name@ul.ac.za).");
       return;
     }
     if (phone && !isValidPhone(phone)) {
@@ -1441,32 +1448,33 @@ function App() {
       }
     }
 
-    const updated = {
-      ...userProfile,
-      role,
-      fullName,
-      email,
-      phone,
-      faculty: role === "student" ? (profileForm.faculty || "").trim() : (userProfile.faculty || ""),
-      yearOfStudy: role === "student" ? (profileForm.yearOfStudy || "").trim() : (userProfile.yearOfStudy || ""),
-      department: role === "admin" ? (profileForm.department || "").trim() : (userProfile.department || ""),
-      updatedAt: new Date().toISOString()
-    };
-    saveAccount(updated);
-    setUserProfile(updated);
-    setProfileMode("view");
-    setProfileMessage("Profile updated.");
+    try {
+      const res = await api.updateProfile({
+        full_name: fullName,
+        phone: phone || null,
+        faculty: role === "student" ? ((profileForm.faculty || "").trim() || null) : undefined,
+        year_of_study: role === "student" ? ((profileForm.yearOfStudy || "").trim() || null) : undefined,
+        department: role === "admin" ? ((profileForm.department || "").trim() || null) : undefined,
+      });
+
+      setUserProfile(res.data);
+      setProfileMode("view");
+      setProfileMessage("Profile updated");
+    } catch (err) {
+      setProfileMessage(err.message || "Could not save profile. Please try again.");
+    }
   };
 
-  // LOGOUT HANDLER — backend integrated
+  // LOGOUT HANDLER  backend integrated
   const handleLogout = async () => {
     try {
       await api.logout();
     } catch {
-      // Ignore — we're logging out anyway
+      // Ignore errors on logout
     }
     clearToken();
     setUserProfile(null);
+    setFavourites([]);       
     setProfileForm(emptyProfileForm("student"));
     setProfileMode("login");
     setProfileMessage("You have been signed out.");
@@ -2239,7 +2247,7 @@ function App() {
               <span>Favourites</span>
             </button>
             <div className="stat">
-              <strong>{userProfile.registeredAt ? new Date(userProfile.registeredAt).toLocaleDateString() : "—"}</strong>
+              <strong>{userProfile.createdAt ? new Date(userProfile.createdAt).toLocaleDateString('en-GB') : "—"}</strong>
               <span>Joined</span>
             </div>
           </div>
@@ -2314,8 +2322,9 @@ function App() {
               <input
                 type="email"
                 value={profileForm.email}
-                onChange={(e) => setProfileForm((f) => ({ ...f, email: e.target.value }))}
+                disabled
               />
+              <small className="muted">Contact admin to change email.</small>
             </div>
             <div className="form-group">
               <label><Phone size={14} /> Phone</label>
@@ -2724,6 +2733,25 @@ function App() {
     );
   };
 
+  // While we're restoring the session, show a neutral splash (avoids auth flash)
+  if (bootstrapping) {
+    return (
+      <div className="auth-landing" data-theme={theme}>
+        <div className="auth-landing-bg" aria-hidden="true" />
+        <div className="auth-landing-card" style={{ textAlign: "center" }}>
+          <img src="/ul-logo.jpeg" alt="University of Limpopo" className="auth-logo" style={{ margin: "0 auto" }} />
+          <div className="auth-uni">University of Limpopo</div>
+          <h1 className="auth-title">Campus Navigator</h1>
+          <p className="auth-tagline">Finding solutions for Africa</p>
+          <div style={{ marginTop: 24, opacity: 0.6 }}>
+            <div className="routing-spinner" style={{ margin: "0 auto" }} />
+            <p style={{ fontSize: 13, marginTop: 8 }}>Restoring your session…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ========== AUTH LANDING (required before map) ==========
   if (!userProfile) {
     const role = profileForm.role === "guest" ? "guest" : "student";
@@ -2920,7 +2948,7 @@ function App() {
                   />
                 </div>
 
-                {!isLogin && (
+                {!isLogin && ( 
                   <>
                     <div className="form-group">
                       <label><Lock size={14} /> Confirm password</label>

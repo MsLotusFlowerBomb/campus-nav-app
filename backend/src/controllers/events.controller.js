@@ -81,21 +81,4 @@ module.exports = {
 	updateEvent,
 	deleteEvent,
 };
-/* Get all events */
 
-/* Get a single event */
-
-
-/*  Get events by date */
-
-
-/*  Create a new event (admin only) */
-
-
-/* Update an event (admin only) */
-
-
-/* Delete an event (admin only) */
-
-
-module.exports = {};
