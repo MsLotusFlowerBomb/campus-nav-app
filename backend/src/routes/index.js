@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const placesRoutes = require('./places.routes');
+const authRoutes = require('./auth.routes');
 //const eventsRoutes = require('./events.routes');
 const eventsRoutes = require('./events.routes');
 
