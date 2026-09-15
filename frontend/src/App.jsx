@@ -57,6 +57,7 @@ import {
 import { api, setToken, getToken, clearToken } from './api/client';
 import "./App.css";
 
+
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -87,119 +88,6 @@ const CATEGORIES = [
   { id: "parking", name: "Parking", color: "#64748B", Icon: Car }
 ];
 
-// Sample campus events (students & guests). Dates relative to Sep 2026.
-const CAMPUS_EVENTS = [
-  {
-    id: "ev1",
-    title: "Welcome Week Orientation",
-    date: "2026-09-08",
-    time: "09:00",
-    endTime: "12:00",
-    location: "Student Centre (Cafeteria & Shops)",
-    placeId: "student-centre",
-    category: "student",
-    description: "Orientation for new and returning students. Campus tour and info stalls."
-  },
-  {
-    id: "ev2",
-    title: "Library Research Skills Workshop",
-    date: "2026-09-10",
-    time: "14:00",
-    endTime: "16:00",
-    location: "University Library",
-    placeId: "university-library",
-    category: "academic",
-    description: "Learn how to search databases, cite sources, and use the library catalogue."
-  },
-  {
-    id: "ev3",
-    title: "Science Faculty Open Day",
-    date: "2026-09-12",
-    time: "10:00",
-    endTime: "15:00",
-    location: "Science Building",
-    placeId: "science-building",
-    category: "academic",
-    description: "Lab demos, career talks, and meet lecturers. Open to students and guests."
-  },
-  {
-    id: "ev4",
-    title: "Intramural Soccer Finals",
-    date: "2026-09-13",
-    time: "15:30",
-    endTime: "17:30",
-    location: "Sports Complex",
-    placeId: "sports-complex",
-    category: "recreation",
-    description: "Championship match between North and South residences. Free entry for students."
-  },
-  {
-    id: "ev5",
-    title: "Health & Wellness Fair",
-    date: "2026-09-15",
-    time: "09:00",
-    endTime: "13:00",
-    location: "Health & Wellness Centre",
-    placeId: "health-wellness",
-    category: "support",
-    description: "Free screenings, mental health tips, and wellness activities."
-  },
-  {
-    id: "ev6",
-    title: "Career Fair 2026",
-    date: "2026-09-18",
-    time: "09:00",
-    endTime: "16:00",
-    location: "Student Centre (Cafeteria & Shops)",
-    placeId: "student-centre",
-    category: "student",
-    description: "Meet employers, CV clinics, and internship opportunities. Guests welcome."
-  },
-  {
-    id: "ev7",
-    title: "Engineering Design Showcase",
-    date: "2026-09-20",
-    time: "11:00",
-    endTime: "15:00",
-    location: "Engineering Building",
-    placeId: "engineering-building",
-    category: "academic",
-    description: "Student projects on display. Industry partners invited."
-  },
-  {
-    id: "ev8",
-    title: "Cultural Evening",
-    date: "2026-09-22",
-    time: "18:00",
-    endTime: "21:00",
-    location: "Humanities Building",
-    placeId: "humanities-building",
-    category: "student",
-    description: "Music, dance, and food from across Africa. Open to the campus community."
-  },
-  {
-    id: "ev9",
-    title: "Exam Prep Study Session",
-    date: "2026-09-25",
-    time: "17:00",
-    endTime: "20:00",
-    location: "University Library",
-    placeId: "university-library",
-    category: "academic",
-    description: "Quiet study space with peer tutors available for selected modules."
-  },
-  {
-    id: "ev10",
-    title: "Residence Sports Day",
-    date: "2026-09-27",
-    time: "08:00",
-    endTime: "14:00",
-    location: "Sports Complex",
-    placeId: "sports-complex",
-    category: "recreation",
-    description: "Friendly competition between residences. All students welcome."
-  }
-];
 
 function createYouAreHereIcon(headingDeg = null) {
   if (headingDeg == null || Number.isNaN(headingDeg)) {
@@ -965,13 +853,7 @@ function App() {
   const [selectedEventDate, setSelectedEventDate] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
 
-  const [campusEvents, setCampusEvents] = useState(() => {
-    try {
-      const raw = localStorage.getItem("ul_nav_events");
-      if (raw) return JSON.parse(raw);
-    } catch { /* ignore */ }
-    return CAMPUS_EVENTS;
-  });
+  const [campusEvents, setCampusEvents] = useState([]);
   const [appStats, setAppStats] = useState(() => {
     try {
       const raw = localStorage.getItem("ul_nav_stats");
@@ -1158,11 +1040,15 @@ function App() {
     });
   }, []);
 
+  // Load events from the API on mount
   useEffect(() => {
-    try {
-      localStorage.setItem("ul_nav_events", JSON.stringify(campusEvents));
-    } catch { /* ignore */ }
-  }, [campusEvents]);
+    api.getEvents({ upcoming: true, limit: 100 })
+      .then((res) => setCampusEvents(res.data || []))
+      .catch((err) => {
+        console.warn('[events] Failed to load:', err.message);
+        setCampusEvents([]);
+      });
+  }, []);
 
   useEffect(() => {
     try {
