@@ -96,6 +96,10 @@ export const api = {
       ...res,
       data: { ...res.data, profile: mapProfileFromApi(res.data.profile) },
     })),
+  forgotPassword: (body) => apiFetch('/api/v1/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }),
   guest: (body) => apiFetch('/api/v1/auth/guest', { method: 'POST', body: JSON.stringify(body) })
     .then((res) => ({
       ...res,
