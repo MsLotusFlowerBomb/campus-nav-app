@@ -8,6 +8,17 @@ const isStrongPassword = (pwd) => {
   return /[a-z]/.test(pwd) && /[A-Z]/.test(pwd) && /[0-9]/.test(pwd) && /[^A-Za-z0-9]/.test(pwd);
 };
 
+const isLikelyEmail = (value) => {
+  const email = String(value || '').trim();
+  if (!email || email.length > 254) return false;
+
+  const at = email.indexOf('@');
+  if (at <= 0 || at !== email.lastIndexOf('@') || at === email.length - 1) return false;
+
+  const domain = email.slice(at + 1);
+  return domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.');
+};
+
 const register = async (req, res) => { 
   try {
     const {
@@ -153,7 +164,7 @@ const forgotPassword = async (req, res) => {
       return errorResponse(res, 'Provide student number or email', 400);
     }
 
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (email && !isLikelyEmail(email)) {
       return errorResponse(res, 'Enter a valid email address', 400);
     }
 
