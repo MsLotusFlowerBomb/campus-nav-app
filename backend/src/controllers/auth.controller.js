@@ -8,6 +8,17 @@ const isStrongPassword = (pwd) => {
   return /[a-z]/.test(pwd) && /[A-Z]/.test(pwd) && /[0-9]/.test(pwd) && /[^A-Za-z0-9]/.test(pwd);
 };
 
+const isLikelyEmail = (value) => {
+  const email = String(value || '').trim();
+  if (!email || email.length > 254) return false;
+
+  const at = email.indexOf('@');
+  if (at <= 0 || at !== email.lastIndexOf('@') || at === email.length - 1) return false;
+
+  const domain = email.slice(at + 1);
+  return domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.');
+};
+
 const register = async (req, res) => { 
   try {
     const {
@@ -143,6 +154,36 @@ const login = async (req, res) => {
   }
 };
 
+const forgotPassword = async (req, res) => {
+  try {
+    const studentNumber = (req.body?.studentNumber || '').trim().toUpperCase();
+    const email = (req.body?.email || '').trim().toLowerCase();
+    const resetRedirectTo = (req.body?.resetRedirectTo || '').trim();
+
+    if (!studentNumber && !email) {
+      return errorResponse(res, 'Provide student number or email', 400);
+    }
+
+    if (email && !isLikelyEmail(email)) {
+      return errorResponse(res, 'Enter a valid email address', 400);
+    }
+
+    if (studentNumber && !(/^20\d{7,9}$/.test(studentNumber) || /^\d{8,10}$/.test(studentNumber))) {
+      return errorResponse(res, 'Enter a valid student number', 400);
+    }
+
+    await authService.forgotPassword({ studentNumber, email, resetRedirectTo });
+    return successResponse(
+      res,
+      null,
+      'If an account exists, password reset instructions have been sent.'
+    );
+  } catch (error) {
+    logger.error('Forgot password error:', error.message || error);
+    return errorResponse(res, 'Could not process forgot password request', 500);
+  }
+};
+
 const me = async (req, res) => {
   // authenticateUser middleware already attached req.profile
   return successResponse(res, req.profile, 'Current user');
@@ -159,4 +200,4 @@ const logout = async (req, res) => {
   }
 };
 
-module.exports = { register, guest, login, me, logout };
+module.exports = { register, guest, login, forgotPassword, me, logout };

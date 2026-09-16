@@ -908,6 +908,9 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [showQrPopup, setShowQrPopup] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(() => !!getToken());
+  const [pageLoading, setPageLoading] = useState(false);
+  const pageLoadingTimer = useRef(null);
+  const previousViewForLoading = useRef(view);
 
   const emptyProfileForm = (role = "student") => ({
     role,
@@ -921,6 +924,14 @@ function App() {
     password: "",
     confirmPassword: ""
   });
+
+  const showPageLoadingSplash = useCallback((duration = 380) => {
+    if (pageLoadingTimer.current) clearTimeout(pageLoadingTimer.current);
+    setPageLoading(true);
+    pageLoadingTimer.current = setTimeout(() => {
+      setPageLoading(false);
+    }, duration);
+  }, []);
 
   const isStrongPassword = (pwd) => {
     if (!pwd || pwd.length < 8) return false;
@@ -1101,6 +1112,21 @@ function App() {
     }
     setProfileMessage("");
   }, [view, userProfile]);
+
+  useEffect(() => {
+    if (bootstrapping) {
+      previousViewForLoading.current = view;
+      return;
+    }
+    if (previousViewForLoading.current !== view) {
+      showPageLoadingSplash();
+      previousViewForLoading.current = view;
+    }
+  }, [view, bootstrapping, showPageLoadingSplash]);
+
+  useEffect(() => () => {
+    if (pageLoadingTimer.current) clearTimeout(pageLoadingTimer.current);
+  }, []);
 
   // RESTORE SESSION PROFILE FROM TOKEN ON APP LOAD
   useEffect(() => {
@@ -1308,6 +1334,40 @@ function App() {
       } else {
         setProfileMessage(err.message || "Login failed. Please try again.");
       }
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const sn = (profileForm.studentNumber || "").trim().toUpperCase();
+    const email = (profileForm.email || "").trim().toLowerCase();
+
+    if (!sn && !email) {
+      setProfileMessage("Enter your student number or email address.");
+      return;
+    }
+    if (sn && !isValidStudentNumber(sn)) {
+      setProfileMessage("Enter a valid student number.");
+      return;
+    }
+    if (email && !isValidEmail(email)) {
+      setProfileMessage("Enter a valid email address.");
+      return;
+    }
+
+    setPageLoading(true);
+    try {
+      await api.forgotPassword({
+        studentNumber: sn || undefined,
+        email: email || undefined,
+        resetRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+      });
+      setProfileMessage("If an account exists, reset instructions have been sent.");
+      setProfileMode("login");
+      setProfileForm((f) => ({ ...f, password: "", confirmPassword: "" }));
+    } catch (err) {
+      setProfileMessage(err.message || "Could not process your request. Please try again.");
+    } finally {
+      setPageLoading(false);
     }
   };
 
@@ -2058,49 +2118,105 @@ function App() {
               <User size={24} strokeWidth={2.2} />
             </div>
             <div className="panel-hero-text">
-              <h3>Student sign in</h3>
-              <p>Sign in with your University of Limpopo student number.</p>
+              <h3>{profileMode === "forgot" ? "Forgot password" : "Student sign in"}</h3>
+              <p>
+                {profileMode === "forgot"
+                  ? "Enter your student number or email to receive reset instructions."
+                  : "Sign in with your University of Limpopo student number."}
+              </p>
             </div>
           </div>
 
           <div className="profile-form-card">
-            <div className="form-group">
-              <label>
-                <IdCard size={14} />
-                Student number
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 202012345"
-                value={profileForm.studentNumber}
-                onChange={(e) => setProfileForm((f) => ({ ...f, studentNumber: e.target.value }))}
-                autoCapitalize="characters"
-              />
-            </div>
+            {profileMode === "forgot" ? (
+              <>
+                <div className="form-group">
+                  <label>
+                    <IdCard size={14} />
+                    Student number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 202012345"
+                    value={profileForm.studentNumber}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, studentNumber: e.target.value }))}
+                    autoCapitalize="characters"
+                  />
+                </div>
+                <div className="form-group">
+                  <label><Mail size={14} /> Email address</label>
+                  <input
+                    type="email"
+                    placeholder="name@ul.ac.za"
+                    value={profileForm.email}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, email: e.target.value }))}
+                  />
+                </div>
+                <button type="button" className="btn-primary full" onClick={handleForgotPassword}>
+                  Send reset instructions
+                </button>
+                <button
+                  type="button"
+                  className="auth-text-link profile-forgot-link"
+                  onClick={() => {
+                    setProfileMode("login");
+                    setProfileMessage("");
+                  }}
+                >
+                  Back to sign in
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label>
+                    <IdCard size={14} />
+                    Student number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 202012345"
+                    value={profileForm.studentNumber}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, studentNumber: e.target.value }))}
+                    autoCapitalize="characters"
+                  />
+                </div>
 
-            <div className="form-group">
-              <label><Lock size={14} /> Password</label>
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Your password"
-                value={profileForm.password}
-                onChange={(e) => setProfileForm((f) => ({ ...f, password: e.target.value }))}
-                autoComplete="current-password"
-              />
-            </div>
+                <div className="form-group">
+                  <label><Lock size={14} /> Password</label>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Your password"
+                    value={profileForm.password}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, password: e.target.value }))}
+                    autoComplete="current-password"
+                  />
+                </div>
 
-            <label className="show-password-row">
-              <input
-                type="checkbox"
-                checked={showPassword}
-                onChange={(e) => setShowPassword(e.target.checked)}
-              />
-              Show password
-            </label>
+                <label className="show-password-row">
+                  <input
+                    type="checkbox"
+                    checked={showPassword}
+                    onChange={(e) => setShowPassword(e.target.checked)}
+                  />
+                  Show password
+                </label>
 
-            <button type="button" className="btn-primary full" onClick={handleLogin}>
-              Sign in as student
-            </button>
+                <button type="button" className="btn-primary full" onClick={handleLogin}>
+                  Sign in as student
+                </button>
+                <button
+                  type="button"
+                  className="auth-text-link profile-forgot-link"
+                  onClick={() => {
+                    setProfileMode("forgot");
+                    setProfileMessage("");
+                  }}
+                >
+                  Forgot password?
+                </button>
+              </>
+            )}
           </div>
 
           <button type="button" className="btn-outline full profile-settings-btn" onClick={() => setShowSettings(true)}>
@@ -2619,6 +2735,21 @@ function App() {
     );
   };
 
+  const renderPageLoadingOverlay = (label = "Loading page…") => (
+    pageLoading ? (
+      <div className="app-loading-splash" data-theme={theme} role="status" aria-live="polite" aria-label={label}>
+        <div className="app-loading-splash-bg" aria-hidden="true" />
+        <div className="app-loading-splash-card">
+          <img src="/ul-logo.jpeg" alt="University of Limpopo" className="auth-logo" />
+          <div className="auth-uni">University of Limpopo</div>
+          <h2 className="auth-title">Campus Navigator</h2>
+          <div className="routing-spinner app-loading-spinner" />
+          <p className="app-loading-text">{label}</p>
+        </div>
+      </div>
+    ) : null
+  );
+
   // While we're restoring the session, show a neutral splash (avoids auth flash)
   if (bootstrapping) {
     return (
@@ -2634,6 +2765,7 @@ function App() {
             <p style={{ fontSize: 13, marginTop: 8 }}>Restoring your session…</p>
           </div>
         </div>
+        {renderPageLoadingOverlay("Loading page…")}
       </div>
     );
   }
@@ -2642,7 +2774,9 @@ function App() {
   if (!userProfile) {
     const role = profileForm.role === "guest" ? "guest" : "student";
     const isGuest = role === "guest";
-    const isLogin = profileMode !== "register";
+    const isLogin = profileMode === "login";
+    const isRegister = profileMode === "register";
+    const isForgot = profileMode === "forgot";
     const appUrl = "https://ul-campus-nav.vercel.app/";
     const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(appUrl)}&bgcolor=ffffff&color=1B2642&margin=8`;
 
@@ -2699,7 +2833,7 @@ function App() {
               </button>
               <button
                 type="button"
-                className={!isLogin ? "active" : ""}
+                className={isRegister ? "active" : ""}
                 onClick={() => { setProfileMode("register"); setProfileMessage(""); }}
               >
                 Register
@@ -2758,34 +2892,28 @@ function App() {
               </>
             ) : (
               <>
-                <div className="form-group">
-                  <label>
-                    <IdCard size={14} />
-                    Student number
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 202012345"
-                    value={profileForm.studentNumber}
-                    onChange={(e) => setProfileForm((f) => ({ ...f, studentNumber: e.target.value }))}
-                    autoCapitalize="characters"
-                    autoFocus
-                  />
-                </div>
-
-                {!isLogin && (
-                  <>
+                {isForgot ? (
+                  <div className="forgot-password-panel">
+                    <h3>Forgot password</h3>
+                    <p className="forgot-password-hint">
+                      Enter your student number or email address to receive reset instructions.
+                    </p>
                     <div className="form-group">
-                      <label><User size={14} /> Full name</label>
+                      <label>
+                        <IdCard size={14} />
+                        Student number
+                      </label>
                       <input
                         type="text"
-                        placeholder="e.g. Thabo Molefe"
-                        value={profileForm.fullName}
-                        onChange={(e) => setProfileForm((f) => ({ ...f, fullName: e.target.value }))}
+                        placeholder="e.g. 202012345"
+                        value={profileForm.studentNumber}
+                        onChange={(e) => setProfileForm((f) => ({ ...f, studentNumber: e.target.value }))}
+                        autoCapitalize="characters"
+                        autoFocus
                       />
                     </div>
                     <div className="form-group">
-                      <label><Mail size={14} /> Email</label>
+                      <label><Mail size={14} /> Email address</label>
                       <input
                         type="email"
                         placeholder="name@ul.ac.za"
@@ -2793,82 +2921,147 @@ function App() {
                         onChange={(e) => setProfileForm((f) => ({ ...f, email: e.target.value }))}
                       />
                     </div>
-                    <div className="form-group">
-                      <label><Phone size={14} /> Phone (optional)</label>
-                      <input
-                        type="tel"
-                        placeholder="0XX XXX XXXX"
-                        value={profileForm.phone}
-                        onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label><GraduationCap size={14} /> Faculty (optional)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Science & Agriculture"
-                        value={profileForm.faculty}
-                        onChange={(e) => setProfileForm((f) => ({ ...f, faculty: e.target.value }))}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Year of study (optional)</label>
-                      <input
-                        type="text"
-                        placeholder="1 – 6"
-                        value={profileForm.yearOfStudy}
-                        onChange={(e) => setProfileForm((f) => ({ ...f, yearOfStudy: e.target.value }))}
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div className="form-group">
-                  <label><Lock size={14} /> Password</label>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder={isLogin ? "Your password" : "Create a strong password"}
-                    value={profileForm.password}
-                    onChange={(e) => setProfileForm((f) => ({ ...f, password: e.target.value }))}
-                    autoComplete={isLogin ? "current-password" : "new-password"}
-                  />
-                </div>
-
-                {!isLogin && ( 
+                    <button type="button" className="btn-primary full auth-submit" onClick={handleForgotPassword}>
+                      Send reset instructions
+                    </button>
+                    <button
+                      type="button"
+                      className="auth-text-link"
+                      onClick={() => {
+                        setProfileMode("login");
+                        setProfileMessage("");
+                      }}
+                    >
+                      Back to sign in
+                    </button>
+                  </div>
+                ) : (
                   <>
                     <div className="form-group">
-                      <label><Lock size={14} /> Confirm password</label>
+                      <label>
+                        <IdCard size={14} />
+                        Student number
+                      </label>
                       <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Re-enter password"
-                        value={profileForm.confirmPassword}
-                        onChange={(e) => setProfileForm((f) => ({ ...f, confirmPassword: e.target.value }))}
-                        autoComplete="new-password"
+                        type="text"
+                        placeholder="e.g. 202012345"
+                        value={profileForm.studentNumber}
+                        onChange={(e) => setProfileForm((f) => ({ ...f, studentNumber: e.target.value }))}
+                        autoCapitalize="characters"
+                        autoFocus
                       />
                     </div>
-                    <p className="password-hint">
-                      Use 8+ characters with uppercase, lowercase, a number, and a special character (e.g. Campus@2026).
-                    </p>
+
+                    {isRegister && (
+                      <>
+                        <div className="form-group">
+                          <label><User size={14} /> Full name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Thabo Molefe"
+                            value={profileForm.fullName}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, fullName: e.target.value }))}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label><Mail size={14} /> Email</label>
+                          <input
+                            type="email"
+                            placeholder="name@ul.ac.za"
+                            value={profileForm.email}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, email: e.target.value }))}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label><Phone size={14} /> Phone (optional)</label>
+                          <input
+                            type="tel"
+                            placeholder="0XX XXX XXXX"
+                            value={profileForm.phone}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label><GraduationCap size={14} /> Faculty (optional)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Science & Agriculture"
+                            value={profileForm.faculty}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, faculty: e.target.value }))}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Year of study (optional)</label>
+                          <input
+                            type="text"
+                            placeholder="1 – 6"
+                            value={profileForm.yearOfStudy}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, yearOfStudy: e.target.value }))}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="form-group">
+                      <label><Lock size={14} /> Password</label>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder={isLogin ? "Your password" : "Create a strong password"}
+                        value={profileForm.password}
+                        onChange={(e) => setProfileForm((f) => ({ ...f, password: e.target.value }))}
+                        autoComplete={isLogin ? "current-password" : "new-password"}
+                      />
+                    </div>
+
+                    {isRegister && (
+                      <>
+                        <div className="form-group">
+                          <label><Lock size={14} /> Confirm password</label>
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Re-enter password"
+                            value={profileForm.confirmPassword}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+                            autoComplete="new-password"
+                          />
+                        </div>
+                        <p className="password-hint">
+                          Use 8+ characters with uppercase, lowercase, a number, and a special character (e.g. Campus@2026).
+                        </p>
+                      </>
+                    )}
+
+                    <label className="show-password-row">
+                      <input
+                        type="checkbox"
+                        checked={showPassword}
+                        onChange={(e) => setShowPassword(e.target.checked)}
+                      />
+                      Show password
+                    </label>
+
+                    {isLogin ? (
+                      <>
+                        <button type="button" className="btn-primary full auth-submit" onClick={handleLogin}>
+                          Sign in as student
+                        </button>
+                        <button
+                          type="button"
+                          className="auth-text-link"
+                          onClick={() => {
+                            setProfileMode("forgot");
+                            setProfileMessage("");
+                          }}
+                        >
+                          Forgot password?
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className="btn-primary full auth-submit" onClick={handleRegister}>
+                        Create student account
+                      </button>
+                    )}
                   </>
-                )}
-
-                <label className="show-password-row">
-                  <input
-                    type="checkbox"
-                    checked={showPassword}
-                    onChange={(e) => setShowPassword(e.target.checked)}
-                  />
-                  Show password
-                </label>
-
-                {isLogin ? (
-                  <button type="button" className="btn-primary full auth-submit" onClick={handleLogin}>
-                    Sign in as student
-                  </button>
-                ) : (
-                  <button type="button" className="btn-primary full auth-submit" onClick={handleRegister}>
-                    Create student account
-                  </button>
                 )}
               </>
             )}
@@ -2917,6 +3110,7 @@ function App() {
             </div>
           </div>
         )}
+        {renderPageLoadingOverlay("Loading page…")}
       </div>
     );
   }
@@ -3433,6 +3627,7 @@ function App() {
           )}
         </div>
         {renderRatingModal()}
+        {renderPageLoadingOverlay("Loading page…")}
       </div>
     );
   }
@@ -3476,6 +3671,7 @@ function App() {
         {renderBottomNav("search")}
         {renderSettingsModal()}
         {renderModeBeforeNavModal()}
+        {renderPageLoadingOverlay("Loading page…")}
       </div>
     );
   }
@@ -3494,6 +3690,7 @@ function App() {
         {renderBottomNav("events")}
         {renderSettingsModal()}
         {renderModeBeforeNavModal()}
+        {renderPageLoadingOverlay("Loading page…")}
       </div>
     );
   }
@@ -3513,6 +3710,7 @@ function App() {
         {renderBottomNav("map")}
         {renderSettingsModal()}
         {renderModeBeforeNavModal()}
+        {renderPageLoadingOverlay("Loading page…")}
       </div>
     );
   }
@@ -3531,6 +3729,7 @@ function App() {
         {renderBottomNav("profile")}
         {renderSettingsModal()}
         {renderModeBeforeNavModal()}
+        {renderPageLoadingOverlay("Loading page…")}
       </div>
     );
   }
@@ -3705,6 +3904,7 @@ function App() {
         {renderBottomNav("route")}
         {renderSettingsModal()}
         {renderModeBeforeNavModal()}
+        {renderPageLoadingOverlay("Loading page…")}
       </div>
     );
   }
@@ -4055,6 +4255,7 @@ function App() {
         {renderSettingsModal()}
         {renderModeBeforeNavModal()}
         {renderRatingModal()}
+        {renderPageLoadingOverlay("Loading page…")}
       </main>
     </div>
   );
